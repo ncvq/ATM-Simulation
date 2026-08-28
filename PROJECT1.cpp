@@ -30,7 +30,7 @@ class AccountManager{
         void flashDriveChecker();
         void saveDrive(); // para sa acc num and pin code ng flashdrive
         void retrieveDrive(); // para sa acc num and pin code ng flashdrive
-        string pinValidation(string pin); // para sa pagcheck kung 4 or 6 digit yung password, string para pwede maglagay 0 sa first digit
+        bool pinValidation(string pin); // para sa pagcheck kung 4 or 6 digit yung password, string para pwede maglagay 0 sa first digit
     
     public:
         bool registerAccount(string pathname);
@@ -42,8 +42,8 @@ class AccountManager{
         bool deposit();
         int menu();
         int locate(string n); // para sa fund transfer kung existing yung user
-        void save();
-        void retrieve();
+        void save(); // para sa mismong database natin
+        void retrieve(); // para sa mismong database natin
 
 };
 
@@ -55,29 +55,79 @@ bool AccountManager :: isEmpty(){
     return(last == -1);
 }
 
-string AccountManager :: pinValidation(string pin){
+bool AccountManager :: pinValidation(string pin){
     if(pin.size() != 4){
         cout << "Invalid Pin Code **Must Only Contain 4-Digits**" << endl;
         system("pause");
-        return;
+        return false;
     }
     for(int i = 0; i < pin.size(); i++){
-        if(isdigit(pin[i])){
+        if(!isdigit(pin[i])){
             cout << "Invalid Pin Code **Must Only Contain Numerical Digits**" << endl;
             system("pause");
-            return;
+            return false;
         }
     }
-    return pin;
+    return true;
 }
 
 int AccountManager :: locate(string n){
-    for(int i = 0; i < last; i++){
+    for(int i = 0; i <= last; i++){
         if(n == person[i].accountNumber){
             return i;
         }
     }
     return -1;
+}
+
+void AccountManager :: save(){
+    ofstream file("UserDatabase.csv");
+    if(!file){
+        cout << "Filename not Found" << endl;
+        return;
+    }
+    else{
+        for(int i = 0; i <= last; i++){
+            file << person[i].accountName << ","
+                << person[i].accountNumber << ","
+                << person[i].birthday << ","
+                << person[i].encryptedPin << ","
+                << person[i].contactNumber << ","
+                << person[i].balance << endl;
+        }
+    }
+    file.close();
+}
+
+void AccountManager :: retrieve(){
+    ifstream file("UserDatabase.csv");
+    
+    if(!file){
+        cout << "Filename not Found" << endl;
+        return;
+    }
+    else{
+        string line;
+        string strBalance; 
+        User filedata;
+        while(getline(file, line)){
+            if(line.empty()){
+                continue;
+            }
+            stringstream ss(line);
+            getline(ss, filedata.accountName, ',');
+            getline(ss, filedata.accountNumber, ',');
+            getline(ss, filedata.birthday, ',');
+            getline(ss, filedata.encryptedPin, ',');
+            getline(ss, filedata.contactNumber, ',');
+            getline(ss, strBalance, ',');
+            filedata.balance = stod(strBalance);
+            if(!isFull()){
+                person[++last] = filedata;
+            }
+        }
+    }
+    file.close();
 }
 
 
