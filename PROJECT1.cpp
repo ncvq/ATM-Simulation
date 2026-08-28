@@ -1,4 +1,11 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <windows.h> // para madetect yung mga flash drive
+#include <cstdlib>
+#include <ctime>
+#include <iomanip>
 using namespace std;
 
 struct AccountDetails{
