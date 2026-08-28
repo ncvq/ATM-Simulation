@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #define MAX 100
 
 using namespace std;
@@ -23,25 +24,25 @@ class AccountManager{
     private:
         User person[MAX];
         int last = -1;
-        bool isFull();
+        bool isFull(); // para sa registration
         bool isEmpty();
         void passwordEncryptor(string pin);
         void passwordDecryptor(string encryptedPin); 
         void flashDriveChecker();
         void saveDrive(); // para sa acc num and pin code ng flashdrive
         void retrieveDrive(); // para sa acc num and pin code ng flashdrive
-        bool pinValidation(string pin); // para sa pagcheck kung 4 or 6 digit yung password, string para pwede maglagay 0 sa first digit
+        bool pinValidation(string pin);
     
     public:
-        bool registerAccount(string pathname);
-        bool loginAccount(string pathname);
+        bool registerAccount(string pathname); // trigger kung wala sa loob ng USB yung accountNum at pincode
+        bool loginAccount(string pathname); // trigger kung nasa USB yung accountNum at pincode
         void changePin();
         void fundTransfer();
         void balanceInquiry();
         bool withdraw(); 
         bool deposit();
         int menu();
-        int locate(string n); // para sa fund transfer kung existing yung user
+        int locate(string n); // para sa fund transfer kung existing yung user 
         void save(); // para sa mismong database natin
         void retrieve(); // para sa mismong database natin
 
@@ -130,7 +131,26 @@ void AccountManager :: retrieve(){
     file.close();
 }
 
+int AccountManager :: menu(){
+    system("cls");
+    int choice;
 
+    cout << "Welcome to eVault, \"Your Money. Digitally Secured\" " << endl;
+    cout << "[1] Balance Inquiry" << endl;
+    cout << "[2] Deposit" << endl;
+    cout << "[3] Withdraw" << endl;
+    cout << "[4] Deposit" << endl;
+    cout << "[5] Fund Transfer" << endl;
+    cout << "[6] Fund Transfer" << endl;
+    cout << "Input your Choice (1-6): " << endl;
+    cin >> choice;
+
+    if (cin.fail()) {
+        cin.clear();
+        cin.ignore(1000, '\n');
+        return 0;
+    }
+}
 int main(){
 
 
