@@ -26,8 +26,8 @@ class AccountManager{
         int last = -1;
         bool isFull(); // para sa registration
         bool isEmpty();
-        void passwordEncryptor(string pin);
-        void passwordDecryptor(string encryptedPin); 
+        string passwordEncryptor(string pin);
+        string passwordDecryptor(string encryptedPin); 
         void flashDriveChecker();
         void saveDrive(); // para sa acc num and pin code ng flashdrive
         void retrieveDrive(); // para sa acc num and pin code ng flashdrive
@@ -91,10 +91,10 @@ void AccountManager :: save(){
         for(int i = 0; i <= last; i++){
             file << person[i].accountName << ","
                 << person[i].accountNumber << ","
+                << person[i].balance << ","
                 << person[i].birthday << ","
-                << person[i].encryptedPin << ","
                 << person[i].contactNumber << ","
-                << person[i].balance << endl;
+                << person[i].encryptedPin << endl;
         }
     }
     file.close();
@@ -129,6 +129,16 @@ void AccountManager :: retrieve(){
         }
     }
     file.close();
+}
+
+string AccountManager :: passwordEncryptor(string pin){
+    string hexadecimalMap[16] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"};
+
+    for(int i = 0; i < pin.size(); i++){
+        int XOR = pin[i] ^ 67; // key = 67
+        pin[i] = (XOR / 16) + (XOR % 16); 
+    }
+    return pin;
 }
 
 int AccountManager :: menu(){
