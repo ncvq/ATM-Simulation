@@ -2,13 +2,13 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <windows.h> 
+#include <windows.h>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <limits>
-#include <cmath>        // ADDED: for fmod() in withdraw()
-#include <cctype>       // ADDED: for isdigit() in pinValidation()
+#include <cmath>
+#include <cctype>
 #define MAX 100
 
 using namespace std;
@@ -26,53 +26,80 @@ class AccountManager{
     private:
         User person[MAX];
         int last = -1;
-        int currentUser = -1;   // ADDED: index ng naka-login na account
-        bool isFull(); // para sa registration
-        bool isEmpty();
+        int currentUser = -1;
+        bool isFull();
         string passwordEncryptor(string pin);
-        string passwordDecryptor(string encryptedPin); 
-        void flashDriveChecker();
-        void saveDrive(); // para sa acc num and pin code ng flashdrive
-        void retrieveDrive(); // para sa acc num and pin code ng flashdrive
+        string flashDriveChecker();
+        bool saveDrive(string accNum, string encPin);
+        bool retrieveDrive(string &accNum, string &encPin);
         bool pinValidation(string pin);
-    
+
     public:
-        bool registerAccount(string pathname); // trigger kung wala sa loob ng USB yung accountNum at pincode
-        bool loginAccount(string pathname); // trigger kung nasa USB yung accountNum at pincode
-        void changePin();
+        bool driveConnected();
+        void registerAccount();
+        bool loginAccount();
+        void logout();
         void fundTransfer();
         void balanceInquiry();
-        bool withdraw(); 
+        void changePin();
+        bool withdraw();
         bool deposit();
-        int menu();
-        int locate(string n); // para sa fund transfer kung existing yung user 
-        void save(); // para sa mismong database natin
-        void retrieve(); // para sa mismong database natin
-
+        int  menu();
+        int  loginMenu();
+        int  locate(string n);
+        void save();
+        void retrieve();
 };
+
+string AccountManager :: flashDriveChecker(){
+    for(char letter = 'A'; letter <= 'Z'; letter++){
+        string drive = string(1,letter) + ":\\";
+        if(GetDriveTypeA(drive.c_str()) == DRIVE_REMOVABLE){
+            return drive;
+        }
+    }
+    return "";
+}
+
+bool AccountManager :: driveConnected(){
+    return flashDriveChecker() != "";
+}
+
+bool AccountManager :: saveDrive(string accNum, string encPin){
+    string path = flashDriveChecker();
+    if(path == ""){
+        cout << "Please Insert an ATM Card to the Machine!" << endl;
+        return false;
+    }
+    ofstream file(path + "\\pin.code");   // FIXED: consistent filename
+    if(!file){
+        cout << "Unable to write to card." << endl;
+        return false;
+    }
+    file << accNum << "\n" << encPin << "\n";
+    file.close();
+    return true;
+}
+
+bool AccountManager :: retrieveDrive(string &accNum, string &encPin){
+    string path = flashDriveChecker();
+    if(path == ""){
+        cout << "Please Insert an ATM Card to the Machine!" << endl;   // ADDED
+        return false;
+    }
+    ifstream file(path + "\\pin.code");   // FIXED: consistent filename
+    if(!file){
+        cout << "Unable to read card data. The card may not be registered." << endl;   // ADDED
+        return false;
+    }
+    getline(file, accNum);
+    getline(file, encPin);
+    file.close();
+    return true;
+}
 
 bool AccountManager :: isFull(){
     return(last == MAX-1);
-}
-
-bool AccountManager :: isEmpty(){
-    return(last == -1);
-}
-
-bool AccountManager :: pinValidation(string pin){
-    if(pin.size() != 4){
-        cout << "Invalid Pin Code **Must Only Contain 4-Digits**" << endl;
-        system("pause");
-        return false;
-    }
-    for(int i = 0; i < pin.size(); i++){
-        if(!isdigit(pin[i])){
-            cout << "Invalid Pin Code **Must Only Contain Numerical Digits**" << endl;
-            system("pause");
-            return false;
-        }
-    }
-    return true;
 }
 
 int AccountManager :: locate(string n){
@@ -84,81 +111,213 @@ int AccountManager :: locate(string n){
     return -1;
 }
 
+bool AccountManager :: pinValidation(string pin){
+    if(pin.size() != 4){
+        cout << "Invalid Pin Code **Must Only Contain 4-Digits**" << endl;
+        system("pause");
+        return false;
+    }
+    for(int i = 0; i < (int)pin.size(); i++){
+        if(!isdigit(pin[i])){
+            cout << "Invalid Pin Code **Must Only Contain Numerical Digits**" << endl;
+            system("pause");
+            return false;
+        }
+    }
+    return true;
+}
+
+string AccountManager :: passwordEncryptor(string pin){
+    string encpin = "";
+    for(int i = 0; i < (int)pin.size(); i++){
+        encpin += (((pin[i] - '0') + 3) % 10) + '0';   // key = 3
+    }
+    return encpin;
+}
+
 void AccountManager :: save(){
     ofstream file("UserDatabase.csv");
     if(!file){
         cout << "Filename not Found" << endl;
         return;
     }
-    else{
-        for(int i = 0; i <= last; i++){
-            file << person[i].accountName    << ","
-                 << person[i].accountNumber  << ","
-                 << person[i].birthday       << ","
-                 << person[i].encryptedPin   << ","
-                 << person[i].contactNumber  << ","
-                 << person[i].balance        << endl;
-        }
+    for(int i = 0; i <= last; i++){
+        file << person[i].accountName    << ","
+             << person[i].accountNumber  << ","
+             << person[i].birthday       << ","
+             << person[i].encryptedPin   << ","
+             << person[i].contactNumber  << ","
+             << person[i].balance        << endl;
     }
     file.close();
 }
 
 void AccountManager :: retrieve(){
     ifstream file("UserDatabase.csv");
-    
     if(!file){
         cout << "No existing database. A new one will be created." << endl;
         return;
     }
-    else{
-        last = -1;
-        string line;
-        string strBalance; 
-        User filedata;
-        while(getline(file, line)){
-            if(line.empty()){
-                continue;
-            }
-            stringstream ss(line);
-            getline(ss, filedata.accountName, ',');
-            getline(ss, filedata.accountNumber, ',');
-            getline(ss, filedata.birthday, ',');
-            getline(ss, filedata.encryptedPin, ',');
-            getline(ss, filedata.contactNumber, ',');
-            getline(ss, strBalance, ',');
-
-            if(strBalance.empty()){
-                continue;
-            }
-            filedata.balance = stod(strBalance);
-
-            if(!isFull()){
-                person[++last] = filedata;
-            }
+    last = -1;
+    string line, strBalance;
+    User filedata;
+    while(getline(file, line)){
+        if(line.empty()) continue;
+        stringstream ss(line);
+        getline(ss, filedata.accountName, ',');
+        getline(ss, filedata.accountNumber, ',');
+        getline(ss, filedata.birthday, ',');
+        getline(ss, filedata.encryptedPin, ',');
+        getline(ss, filedata.contactNumber, ',');
+        getline(ss, strBalance, ',');
+        if(strBalance.empty()) continue;
+        filedata.balance = stod(strBalance);
+        if(!isFull()){
+            person[++last] = filedata;
         }
     }
     file.close();
 }
 
-string AccountManager :: passwordEncryptor(string pin){
-    string hexadecimalMap[16] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"};
+void AccountManager :: registerAccount(){
+    system("cls");
 
-    for(int i = 0; i < pin.size(); i++){
-        int XOR = pin[i] ^ 67; // key = 67
-        pin[i] = (XOR / 16) + (XOR % 16); 
+    if(isFull()){
+        cout << "Our banking system has reached max capacity!" << endl;
+        system("pause");
+        return;
     }
-    return pin;
+
+    if(!driveConnected()){
+        cout << "Please Insert an ATM Card to the Machine!" << endl;
+        system("pause");
+        return;
+    }
+
+    string existingAccNum, existingEncPin;
+    if(retrieveDrive(existingAccNum, existingEncPin)){
+        int pos = locate(existingAccNum);
+        if(pos != -1){
+            cout << "This card is already registered to an existing account." << endl;
+            cout << "Account Name: " << person[pos].accountName << endl;
+            cout << "Registering a new account will overwrite this card and you" << endl;
+            cout << "will lose access to the existing account through this card." << endl;
+            cout << "Continue anyway? (Y/N): ";
+            char confirm;
+            cin >> confirm;
+            if(confirm != 'Y' && confirm != 'y'){
+                cout << "Registration cancelled." << endl;
+                system("pause");
+                return;
+            }
+        }
+    }
+
+    User x;
+    string accNum;
+    string rawPin;
+    cout << "========================================" << endl;
+    cout << "           NEW ACCOUNT REGISTRATION      " << endl;
+    cout << "========================================" << endl;
+
+    cin.ignore(1000, '\n');
+    cout << "Full Name: ";              getline(cin, x.accountName);
+    cout << "Birthday (MM/DD/YYYY): ";  getline(cin, x.birthday);
+    cout << "Contact Number: ";         getline(cin, x.contactNumber);
+
+    do{
+        cout << "Initial Deposit (min PHP 5000): PHP ";
+        cin >> x.balance;
+        if(cin.fail()){
+            cin.clear();
+            cin.ignore(1000, '\n');
+            x.balance = 0;
+            cout << "Invalid input. Numbers only." << endl;
+        }
+        else if(x.balance < 5000){
+            cout << "Amount is below the minimum. Initial deposit must be at least PHP 5000.00" << endl;   // ADDED
+        }
+    } while(x.balance < 5000);
+
+    do{
+        accNum = to_string(10000 + rand() % 90000);
+    } while(locate(accNum) != -1);
+    x.accountNumber = accNum;
+
+    do{
+        cout << "Set a 4-digit PIN: ";
+        cin >> rawPin;
+    } while(!pinValidation(rawPin));
+    x.encryptedPin = passwordEncryptor(rawPin);
+
+    last++;
+    person[last] = x;
+
+    if(!saveDrive(accNum, x.encryptedPin)){   // FIXED: now checks the result
+        cout << "Registration failed: could not write to card." << endl;
+        last--; 
+        system("pause");
+        return;
+    }
+
+    save();
+
+    cout << "\n--- REGISTRATION SUCCESSFUL ---" << endl;
+    cout << "Account Number: " << x.accountNumber << endl;
+    cout << "Please keep your card safe." << endl;
+    system("pause");
+}
+
+bool AccountManager :: loginAccount(){
+    system("cls");
+    string cardAccNum;
+    string cardEncPin;
+
+    if(!retrieveDrive(cardAccNum, cardEncPin)){
+        system("pause");
+        return false;
+    }
+
+    int pos = locate(cardAccNum);
+    if(pos == -1){
+        cout << "Account not recognized by this system." << endl;
+        system("pause");
+        return false;
+    }
+
+    if(cardEncPin != person[pos].encryptedPin){
+        cout << "Card data mismatch. Possible tampering." << endl;
+        system("pause");   // FIXED: was missing
+        return false;
+    }
+
+    string enteredPin;
+    cout << "Enter your PIN: ";
+    cin >> enteredPin;
+
+    if(passwordEncryptor(enteredPin) != person[pos].encryptedPin){
+        cout << "Incorrect PIN." << endl;
+        system("pause");
+        return false;
+    }
+
+    currentUser = pos;
+    cout << "\nWelcome, " << person[pos].accountName << "!" << endl;
+    system("pause");
+    return true;
+}
+
+void AccountManager :: logout(){
+    currentUser = -1;
 }
 
 void AccountManager :: balanceInquiry(){
     system("cls");
-
     if(currentUser == -1){
         cout << "No account is currently logged in." << endl;
         system("pause");
         return;
     }
-
     cout << fixed << setprecision(2);
     cout << "========================================" << endl;
     cout << "            BALANCE INQUIRY             " << endl;
@@ -173,13 +332,11 @@ void AccountManager :: balanceInquiry(){
 bool AccountManager :: deposit(){
     system("cls");
     double amount;
-
     if(currentUser == -1){
         cout << "No account is currently logged in." << endl;
         system("pause");
         return false;
     }
-
     cout << fixed << setprecision(2);
     cout << "========================================" << endl;
     cout << "                DEPOSIT                 " << endl;
@@ -190,18 +347,16 @@ bool AccountManager :: deposit(){
 
     if(cin.fail()){
         cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.ignore(1000, '\n');
         cout << "\nInvalid input. Numbers only." << endl;
         system("pause");
         return false;
     }
-
     if(amount <= 0){
         cout << "\nAmount must be greater than zero." << endl;
         system("pause");
         return false;
     }
-
     if(amount > 50000){
         cout << "\nMaximum deposit per transaction is PHP 50,000.00" << endl;
         system("pause");
@@ -221,13 +376,11 @@ bool AccountManager :: deposit(){
 bool AccountManager :: withdraw(){
     system("cls");
     double amount;
-
     if(currentUser == -1){
         cout << "No account is currently logged in." << endl;
         system("pause");
         return false;
     }
-
     cout << fixed << setprecision(2);
     cout << "========================================" << endl;
     cout << "               WITHDRAW                 " << endl;
@@ -238,24 +391,21 @@ bool AccountManager :: withdraw(){
 
     if(cin.fail()){
         cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.ignore(1000, '\n');
         cout << "\nInvalid input. Numbers only." << endl;
         system("pause");
         return false;
     }
-
     if(amount <= 0){
         cout << "\nAmount must be greater than zero." << endl;
         system("pause");
         return false;
     }
-
     if(fmod(amount, 100) != 0){
         cout << "\nAmount must be in multiples of PHP 100.00" << endl;
         system("pause");
         return false;
     }
-
     if(amount > person[currentUser].balance){
         cout << "\nInsufficient balance." << endl;
         cout << "Available: PHP " << person[currentUser].balance << endl;
@@ -294,13 +444,11 @@ void AccountManager :: fundTransfer(){
     cin  >> recipientAcc;
 
     int index = locate(recipientAcc);
-
     if(index == -1){
         cout << "\nAccount number not found." << endl;
         system("pause");
         return;
     }
-
     if(index == currentUser){
         cout << "\nYou cannot transfer funds to your own account." << endl;
         system("pause");
@@ -313,18 +461,16 @@ void AccountManager :: fundTransfer(){
 
     if(cin.fail()){
         cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.ignore(1000, '\n');
         cout << "\nInvalid input. Numbers only." << endl;
         system("pause");
         return;
     }
-
     if(amount <= 0){
         cout << "\nAmount must be greater than zero." << endl;
         system("pause");
         return;
     }
-
     if(amount > person[currentUser].balance){
         cout << "\nInsufficient balance." << endl;
         system("pause");
@@ -376,11 +522,9 @@ void AccountManager :: changePin(){
 
     cout << "Enter new 4-digit PIN: ";
     cin  >> newPin;
-
     if(!pinValidation(newPin)){
         return;
     }
-
     if(newPin == oldPin){
         cout << "\nNew PIN must be different from the old PIN." << endl;
         system("pause");
@@ -389,14 +533,21 @@ void AccountManager :: changePin(){
 
     cout << "Confirm new PIN: ";
     cin  >> confirmPin;
-
     if(newPin != confirmPin){
         cout << "\nPINs do not match. PIN was not changed." << endl;
         system("pause");
         return;
     }
 
-    person[currentUser].encryptedPin = passwordEncryptor(newPin);
+    string newEncPin = passwordEncryptor(newPin);
+    person[currentUser].encryptedPin = newEncPin;
+
+    if(!saveDrive(person[currentUser].accountNumber, newEncPin)){   // ADDED: keep card in sync
+        cout << "\nWarning: PIN changed in system, but failed to update the card." << endl;
+        system("pause");
+        return;
+    }
+
     save();
 
     cout << "\nPIN changed successfully." << endl;
@@ -420,40 +571,94 @@ int AccountManager :: menu(){
     cout << "Input your Choice (1-6): ";
     cin >> choice;
 
-    if (cin.fail()) {
+    if(cin.fail()){
         cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.ignore(1000, '\n');
+        return 0;
+    }
+    return choice;
+}
+
+int AccountManager :: loginMenu(){
+    system("cls");
+    int choice;
+
+    cout << "========================================" << endl;
+    cout << "  eVault - \"Your Money. Digitally Secured\"" << endl;
+    cout << "========================================" << endl;
+    cout << "[1] Register" << endl;
+    cout << "[2] Login" << endl;
+    cout << "[3] Exit" << endl;
+    cout << "----------------------------------------" << endl;
+    cout << "Input your Choice (1-3): ";
+    cin >> choice;
+
+    if(cin.fail()){
+        cin.clear();
+        cin.ignore(1000, '\n');
         return 0;
     }
     return choice;
 }
 
 int main(){
+    srand((unsigned)time(0));
+
     AccountManager atm;
-    int choice;
 
-    atm.retrieve();     // load database sa startup
+    if(!atm.driveConnected()){
+        cout << "Please Insert an ATM Card to the Machine!" << endl;
+        cout << "No drive detected. Terminating program." << endl;
+        system("pause");
+        return 0;
+    }
 
-    // atm.loginAccount("E:\\");
+    atm.retrieve();
 
+    int loginChoice;
     do{
-        choice = atm.menu();
+        loginChoice = atm.loginMenu();
 
-        switch(choice){
-            case 1: atm.balanceInquiry(); break;
-            case 2: atm.deposit();        break;
-            case 3: atm.withdraw();       break;
-            case 4: atm.fundTransfer();   break;
-            case 5: atm.changePin();      break;
-            case 6:
-                atm.save();
-                cout << "\nLogged out. Thank you!" << endl;
+        switch(loginChoice){
+            case 1:
+                atm.registerAccount();
                 break;
+
+            case 2:
+                if(atm.loginAccount()){
+                    int choice;
+                    do{
+                        choice = atm.menu();
+                        switch(choice){
+                            case 1: atm.balanceInquiry(); break;
+                            case 2: atm.deposit();        break;
+                            case 3: atm.withdraw();       break;
+                            case 4: atm.fundTransfer();   break;
+                            case 5: atm.changePin();      break;
+                            case 6:
+                                atm.logout();   // FIXED: actually clears the session now
+                                cout << "\nLogged out. Thank you!" << endl;
+                                system("pause");
+                                break;
+                            default:
+                                cout << "\nInvalid choice. Try again." << endl;
+                                system("pause");
+                        }
+                    } while(choice != 6);
+                }
+                break;
+
+            case 3:
+                atm.save();
+                cout << "\nThank you for using eVault. Goodbye!" << endl;
+                break;
+
             default:
                 cout << "\nInvalid choice. Try again." << endl;
                 system("pause");
         }
-    }while(choice != 6);
+
+    } while(loginChoice != 3);
 
     return 0;
 }
