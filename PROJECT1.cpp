@@ -35,6 +35,7 @@ class AccountManager{
         bool pinValidation(string pin);
 
     public:
+        bool existingUser();
         bool driveConnected();
         void registerAccount();
         bool loginAccount();
@@ -45,11 +46,21 @@ class AccountManager{
         bool withdraw();
         bool deposit();
         int  menu();
-        int  loginMenu();
         int  locate(string n);
         void save();
         void retrieve();
 };
+
+bool AccountManager :: existingUser(){
+    string existingAccNum, existingEncPin;
+    if(retrieveDrive(existingAccNum, existingEncPin)){  
+        int pos = locate(existingAccNum);
+        if(pos != -1){
+            return true;
+        }
+    }
+    return false;
+}
 
 string AccountManager :: flashDriveChecker(){
     for(char letter = 'A'; letter <= 'Z'; letter++){
@@ -71,7 +82,7 @@ bool AccountManager :: saveDrive(string accNum, string encPin){
         cout << "Please Insert an ATM Card to the Machine!" << endl;
         return false;
     }
-    ofstream file(path + "\\pin.code");   // FIXED: consistent filename
+    ofstream file(path + "\\pin.code");
     if(!file){
         cout << "Unable to write to card." << endl;
         return false;
@@ -84,13 +95,11 @@ bool AccountManager :: saveDrive(string accNum, string encPin){
 bool AccountManager :: retrieveDrive(string &accNum, string &encPin){
     string path = flashDriveChecker();
     if(path == ""){
-        cout << "Please Insert an ATM Card to the Machine!" << endl;   // ADDED
-        return false;
+        return false;   // no message here — checked separately in main()
     }
-    ifstream file(path + "\\pin.code");   // FIXED: consistent filename
+    ifstream file(path + "\\pin.code");
     if(!file){
-        cout << "Unable to read card data. The card may not be registered." << endl;   // ADDED
-        return false;
+        return false; 
     }
     getline(file, accNum);
     getline(file, encPin);
@@ -130,7 +139,7 @@ bool AccountManager :: pinValidation(string pin){
 string AccountManager :: passwordEncryptor(string pin){
     string encpin = "";
     for(int i = 0; i < (int)pin.size(); i++){
-        encpin += (((pin[i] - '0') + 3) % 10) + '0';   // key = 3
+        encpin += (((pin[i] - '0') + 3) % 10) + '0';   // Caesar cipher, key = 3
     }
     return encpin;
 }
@@ -194,30 +203,11 @@ void AccountManager :: registerAccount(){
         return;
     }
 
-    string existingAccNum, existingEncPin;
-    if(retrieveDrive(existingAccNum, existingEncPin)){
-        int pos = locate(existingAccNum);
-        if(pos != -1){
-            cout << "This card is already registered to an existing account." << endl;
-            cout << "Account Name: " << person[pos].accountName << endl;
-            cout << "Registering a new account will overwrite this card and you" << endl;
-            cout << "will lose access to the existing account through this card." << endl;
-            cout << "Continue anyway? (Y/N): ";
-            char confirm;
-            cin >> confirm;
-            if(confirm != 'Y' && confirm != 'y'){
-                cout << "Registration cancelled." << endl;
-                system("pause");
-                return;
-            }
-        }
-    }
-
     User x;
     string accNum;
     string rawPin;
     cout << "========================================" << endl;
-    cout << "           NEW ACCOUNT REGISTRATION      " << endl;
+    cout << "        NEW ACCOUNT REGISTRATION        " << endl;
     cout << "========================================" << endl;
 
     cin.ignore(1000, '\n');
@@ -235,7 +225,7 @@ void AccountManager :: registerAccount(){
             cout << "Invalid input. Numbers only." << endl;
         }
         else if(x.balance < 5000){
-            cout << "Amount is below the minimum. Initial deposit must be at least PHP 5000.00" << endl;   // ADDED
+            cout << "Amount is below the minimum. Initial deposit must be at least PHP 5000.00" << endl;
         }
     } while(x.balance < 5000);
 
@@ -253,9 +243,9 @@ void AccountManager :: registerAccount(){
     last++;
     person[last] = x;
 
-    if(!saveDrive(accNum, x.encryptedPin)){   // FIXED: now checks the result
+    if(!saveDrive(accNum, x.encryptedPin)){
         cout << "Registration failed: could not write to card." << endl;
-        last--; 
+        last--;
         system("pause");
         return;
     }
@@ -274,6 +264,7 @@ bool AccountManager :: loginAccount(){
     string cardEncPin;
 
     if(!retrieveDrive(cardAccNum, cardEncPin)){
+        cout << "Unable to read card data." << endl;
         system("pause");
         return false;
     }
@@ -287,13 +278,20 @@ bool AccountManager :: loginAccount(){
 
     if(cardEncPin != person[pos].encryptedPin){
         cout << "Card data mismatch. Possible tampering." << endl;
-        system("pause");   // FIXED: was missing
+        system("pause");
         return false;
     }
 
+    cout << "========================================" << endl;
+    cout << "                 LOGIN                  " << endl;
+    cout << "========================================" << endl;
     string enteredPin;
     cout << "Enter your PIN: ";
     cin >> enteredPin;
+
+    if(!pinValidation(enteredPin)){
+        return false;
+    }
 
     if(passwordEncryptor(enteredPin) != person[pos].encryptedPin){
         cout << "Incorrect PIN." << endl;
@@ -542,7 +540,7 @@ void AccountManager :: changePin(){
     string newEncPin = passwordEncryptor(newPin);
     person[currentUser].encryptedPin = newEncPin;
 
-    if(!saveDrive(person[currentUser].accountNumber, newEncPin)){   // ADDED: keep card in sync
+    if(!saveDrive(person[currentUser].accountNumber, newEncPin)){
         cout << "\nWarning: PIN changed in system, but failed to update the card." << endl;
         system("pause");
         return;
@@ -579,86 +577,70 @@ int AccountManager :: menu(){
     return choice;
 }
 
-int AccountManager :: loginMenu(){
-    system("cls");
-    int choice;
-
-    cout << "========================================" << endl;
-    cout << "  eVault - \"Your Money. Digitally Secured\"" << endl;
-    cout << "========================================" << endl;
-    cout << "[1] Register" << endl;
-    cout << "[2] Login" << endl;
-    cout << "[3] Exit" << endl;
-    cout << "----------------------------------------" << endl;
-    cout << "Input your Choice (1-3): ";
-    cin >> choice;
-
-    if(cin.fail()){
-        cin.clear();
-        cin.ignore(1000, '\n');
-        return 0;
-    }
-    return choice;
-}
-
 int main(){
-    srand((unsigned)time(0));
+    srand(time(0));
 
     AccountManager atm;
 
     if(!atm.driveConnected()){
         cout << "Please Insert an ATM Card to the Machine!" << endl;
-        cout << "No drive detected. Terminating program." << endl;
-        system("pause");
-        return 0;
+        cout << "No drive detected." << endl;
+        while(!atm.driveConnected()){
+            atm.driveConnected();
+        }
     }
 
     atm.retrieve();
 
-    int loginChoice;
+    if(!atm.existingUser()){
+        atm.registerAccount();
+    }
+
+    bool loggedIn = false;
+    int attempts = 4;
+
+    while(attempts > 0){
+        if(atm.loginAccount()){
+            loggedIn = true;
+            break;
+        }
+        attempts--;
+        if(attempts > 0){
+            cout << attempts << " attempt(s) remaining." << endl;
+            system("pause");
+        }
+    }
+
+    if(!loggedIn){
+        cout << "\n========================================" << endl;
+        cout << "  Too many failed attempts." << endl;
+        cout << "  Session terminated." << endl;
+        cout << "========================================" << endl;
+        atm.save();
+        system("pause");
+        return 0; 
+    }
+
+    int choice;
     do{
-        loginChoice = atm.loginMenu();
-
-        switch(loginChoice){
-            case 1:
-                atm.registerAccount();
+        choice = atm.menu();
+        switch(choice){
+            case 1: atm.balanceInquiry(); break;
+            case 2: atm.deposit();        break;
+            case 3: atm.withdraw();       break;
+            case 4: atm.fundTransfer();   break;
+            case 5: atm.changePin();      break;
+            case 6:
+                atm.logout();
+                cout << "\nLogged out. Thank you!" << endl;
+                system("pause");
                 break;
-
-            case 2:
-                if(atm.loginAccount()){
-                    int choice;
-                    do{
-                        choice = atm.menu();
-                        switch(choice){
-                            case 1: atm.balanceInquiry(); break;
-                            case 2: atm.deposit();        break;
-                            case 3: atm.withdraw();       break;
-                            case 4: atm.fundTransfer();   break;
-                            case 5: atm.changePin();      break;
-                            case 6:
-                                atm.logout();   // FIXED: actually clears the session now
-                                cout << "\nLogged out. Thank you!" << endl;
-                                system("pause");
-                                break;
-                            default:
-                                cout << "\nInvalid choice. Try again." << endl;
-                                system("pause");
-                        }
-                    } while(choice != 6);
-                }
-                break;
-
-            case 3:
-                atm.save();
-                cout << "\nThank you for using eVault. Goodbye!" << endl;
-                break;
-
             default:
                 cout << "\nInvalid choice. Try again." << endl;
                 system("pause");
         }
+    } while(choice != 6);
 
-    } while(loginChoice != 3);
-
+    atm.save();
     return 0;
 }
