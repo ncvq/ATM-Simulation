@@ -33,6 +33,11 @@ class AccountManager{
         bool saveDrive(string accNum, string encPin);
         bool retrieveDrive(string &accNum, string &encPin);
         bool pinValidation(string pin);
+        bool nameValidation(string name);
+        bool monthValidation(int month);
+        bool dayValidation(int day, int month, int year);
+        bool yearValidation(int year);
+        bool contactValidation(string number);
 
     public:
         bool existingUser();
@@ -95,7 +100,7 @@ bool AccountManager :: saveDrive(string accNum, string encPin){
 bool AccountManager :: retrieveDrive(string &accNum, string &encPin){
     string path = flashDriveChecker();
     if(path == ""){
-        return false;   // no message here — checked separately in main()
+        return false;
     }
     ifstream file(path + "\\pin.code");
     if(!file){
@@ -136,10 +141,98 @@ bool AccountManager :: pinValidation(string pin){
     return true;
 }
 
+bool AccountManager :: nameValidation(string name){
+    if(name.empty()){
+        cout << "Name cannot be empty." << endl;
+        system("pause");
+        return false;
+    }
+    if(name.size() > 50){
+        cout << "Name is too long **Maximum 50 Characters**" << endl;
+        system("pause");
+        return false;
+    }
+    bool hasLetter = false;
+    for(int i = 0; i < (int)name.size(); i++){
+        char c = name[i];
+        if(isalpha(c)){
+            hasLetter = true;
+        }
+        else if(c == ' ' || c == '.' || c == '\'' || c == '-'){
+            continue;
+        }
+        else{
+            cout << "Invalid Name **Must Only Contain Letters, Spaces, and ' . - **" << endl;
+            system("pause");
+            return false;
+        }
+    }
+    if(!hasLetter){
+        cout << "Name must contain at least one letter." << endl;
+        system("pause");
+        return false;
+    }
+    return true;
+}
+
+bool AccountManager :: monthValidation(int month){
+    if(month < 1 || month > 12){
+        cout << "Invalid Month **Must Be Between 1-12**" << endl;
+        system("pause");
+        return false;
+    }
+    return true;
+}
+
+bool AccountManager :: yearValidation(int year){
+    if(year < 1900 || year > 2026){
+        cout << "Invalid Year **Must Be Between 1900-2026**" << endl;
+        system("pause");
+        return false;
+    }
+    return true;
+}
+
+bool AccountManager :: dayValidation(int day, int month, int year){
+    int daysInMonth[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    bool leapYear = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    int maxDay = daysInMonth[month - 1];
+    if(month == 2 && leapYear){
+        maxDay = 29;
+    }
+    if(day < 1 || day > maxDay){
+        cout << "Invalid Day **Day Does Not Exist For This Month**" << endl;
+        system("pause");
+        return false;
+    }
+    return true;
+}
+
+bool AccountManager :: contactValidation(string contact){
+    if(contact.size() != 11){
+        cout << "Invalid Contact Number **Must Be Exactly 11 Digits**" << endl;
+        system("pause");
+        return false;
+    }
+    if(contact[0] != '0' || contact[1] != '9'){
+        cout << "Invalid Contact Number **Must Start With 09**" << endl;
+        system("pause");
+        return false;
+    }
+    for(int i = 0; i < (int)contact.size(); i++){
+        if(!isdigit(contact[i])){
+            cout << "Invalid Contact Number **Must Only Contain Digits**" << endl;
+            system("pause");
+            return false;
+        }
+    }
+    return true;
+}
+
 string AccountManager :: passwordEncryptor(string pin){
     string encpin = "";
     for(int i = 0; i < (int)pin.size(); i++){
-        encpin += (((pin[i] - '0') + 3) % 10) + '0';   // Caesar cipher, key = 3
+        encpin += (((pin[i] - '0') + 3) % 10) + '0';
     }
     return encpin;
 }
@@ -150,6 +243,7 @@ void AccountManager :: save(){
         cout << "Filename not Found" << endl;
         return;
     }
+    file << "AccountName,AccountNumber,Birthday,EncryptedPin,ContactNumber,Balance" << endl;
     for(int i = 0; i <= last; i++){
         file << person[i].accountName    << ","
              << person[i].accountNumber  << ","
@@ -159,7 +253,7 @@ void AccountManager :: save(){
              << person[i].balance        << endl;
     }
     file.close();
-}
+}       
 
 void AccountManager :: retrieve(){
     ifstream file("UserDatabase.csv");
@@ -170,6 +264,9 @@ void AccountManager :: retrieve(){
     last = -1;
     string line, strBalance;
     User filedata;
+
+    getline(file, line);
+
     while(getline(file, line)){
         if(line.empty()) continue;
         stringstream ss(line);
@@ -206,14 +303,52 @@ void AccountManager :: registerAccount(){
     User x;
     string accNum;
     string rawPin;
+    int bMonth, bDay, bYear;
+
     cout << "========================================" << endl;
     cout << "        NEW ACCOUNT REGISTRATION        " << endl;
     cout << "========================================" << endl;
+    do{
+        cout << "Full Name: ";
+        getline(cin, x.accountName);
+    } while(!nameValidation(x.accountName));
+
+    do{
+        cout << "Birth Month (1-12): ";
+        cin >> bMonth;
+        if(cin.fail()){
+            cin.clear();
+            cin.ignore(1000, '\n');
+            bMonth = 0;
+        }
+    } while(!monthValidation(bMonth));
+
+    do{
+        cout << "Birth Year: ";
+        cin >> bYear;
+        if(cin.fail()){
+            cin.clear();
+            cin.ignore(1000, '\n');
+            bYear = 0;
+        }
+    } while(!yearValidation(bYear));
+
+    do{
+        cout << "Birth Day: ";
+        cin >> bDay;
+        if(cin.fail()){
+            cin.clear();
+            cin.ignore(1000, '\n');
+            bDay = 0;
+        }
+    } while(!dayValidation(bDay, bMonth, bYear));
+    x.birthday = (bMonth < 10 ? "0" : "") + to_string(bMonth) + "/" + (bDay < 10 ? "0" : "") + to_string(bDay) + "/" + to_string(bYear);
 
     cin.ignore(1000, '\n');
-    cout << "Full Name: ";              getline(cin, x.accountName);
-    cout << "Birthday (MM/DD/YYYY): ";  getline(cin, x.birthday);
-    cout << "Contact Number: ";         getline(cin, x.contactNumber);
+    do{
+        cout << "Contact Number (e.g. 09171234567): ";
+        getline(cin, x.contactNumber);
+    } while(!contactValidation(x.contactNumber));
 
     do{
         cout << "Initial Deposit (min PHP 5000): PHP ";
@@ -625,11 +760,21 @@ int main(){
     do{
         choice = atm.menu();
         switch(choice){
-            case 1: atm.balanceInquiry(); break;
-            case 2: atm.deposit();        break;
-            case 3: atm.withdraw();       break;
-            case 4: atm.fundTransfer();   break;
-            case 5: atm.changePin();      break;
+            case 1: 
+                atm.balanceInquiry(); 
+                break;
+            case 2: 
+                atm.deposit();        
+                break;
+            case 3:    
+                atm.withdraw();       
+                break;
+            case 4: 
+                atm.fundTransfer();     
+                break;
+            case 5: 
+                atm.changePin();      
+                break;
             case 6:
                 atm.logout();
                 cout << "\nLogged out. Thank you!" << endl;
