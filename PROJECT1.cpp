@@ -10,8 +10,16 @@
 #include <cmath>
 #include <cctype>
 #define MAX 100
+#define MAX_HISTORY 20
 
 using namespace std;
+
+struct Transaction {
+    string type;
+    double amount;
+    double balanceAfter;
+    string date;
+};
 
 struct User{
     string accountName;
@@ -20,6 +28,10 @@ struct User{
     string encryptedPin;
     string contactNumber;
     double balance;
+    string secQuestion;
+    string encSecAnswer;
+    Transaction history[MAX_HISTORY];
+    int histCount;
 };
 
 class AccountManager{
@@ -38,6 +50,8 @@ class AccountManager{
         bool dayValidation(int day, int month, int year);
         bool yearValidation(int year);
         bool contactValidation(string number);
+        string getCurrentDate();
+        void addHistory(int idx, string type, double amount, double balAfter);
 
     public:
         bool existingUser();
@@ -54,6 +68,8 @@ class AccountManager{
         int  locate(string n);
         void save();
         void retrieve();
+        void recoverPin();
+        void miniStatement();
 };
 
 bool AccountManager :: existingUser(){
@@ -237,20 +253,61 @@ string AccountManager :: passwordEncryptor(string pin){
     return encpin;
 }
 
+string AccountManager :: getCurrentDate(){
+    time_t now = time(0);
+    tm *ltm = localtime(&now);
+    char buf[20];
+    sprintf(buf, "%02d/%02d/%04d %02d:%02d",
+        ltm->tm_mon + 1, ltm->tm_mday, 1900 + ltm->tm_year,
+        ltm->tm_hour, ltm->tm_min);
+    return string(buf);
+}
+
+void AccountManager :: addHistory(int idx, string type, double amount, double balAfter){
+    if(person[idx].histCount >= MAX_HISTORY){
+        for(int i = 0; i < MAX_HISTORY - 1; i++)
+            person[idx].history[i] = person[idx].history[i + 1];
+        person[idx].histCount = MAX_HISTORY - 1;
+    }
+    int h = person[idx].histCount;
+    person[idx].history[h].type         = type;
+    person[idx].history[h].amount       = amount;
+    person[idx].history[h].balanceAfter = balAfter;
+    person[idx].history[h].date         = getCurrentDate();
+    person[idx].histCount++;
+}
+
 void AccountManager :: save(){
     ofstream file("UserDatabase.csv");
     if(!file){
         cout << "Filename not Found" << endl;
         return;
     }
-    file << "AccountName,AccountNumber,Birthday,EncryptedPin,ContactNumber,Balance" << endl;
+    file << "AccountName,AccountNumber,Birthday,EncryptedPin,ContactNumber,Balance,SecQuestion,EncSecAnswer,HistCount";
+    for(int h = 0; h < MAX_HISTORY; h++)
+        file << ",HType" << h << ",HAmount" << h << ",HBal" << h << ",HDate" << h;
+    file << endl;
     for(int i = 0; i <= last; i++){
         file << person[i].accountName    << ","
              << person[i].accountNumber  << ","
              << person[i].birthday       << ","
              << person[i].encryptedPin   << ","
              << person[i].contactNumber  << ","
-             << person[i].balance        << endl;
+             << fixed << setprecision(2) << person[i].balance << ","
+             << person[i].secQuestion    << ","
+             << person[i].encSecAnswer   << ","
+             << person[i].histCount;
+        for(int h = 0; h < MAX_HISTORY; h++){
+            if(h < person[i].histCount){
+                file << "," << person[i].history[h].type
+                     << "," << person[i].history[h].amount
+                     << "," << person[i].history[h].balanceAfter
+                     << "," << person[i].history[h].date;
+            } else {
+                file << ",,,,";
+            }
+        }
+        file << endl;
     }
     file.close();
 }       
@@ -270,14 +327,33 @@ void AccountManager :: retrieve(){
     while(getline(file, line)){
         if(line.empty()) continue;
         stringstream ss(line);
-        getline(ss, filedata.accountName, ',');
+        string tmp;
+        filedata.histCount = 0;
+        getline(ss, filedata.accountName,   ',');
         getline(ss, filedata.accountNumber, ',');
-        getline(ss, filedata.birthday, ',');
-        getline(ss, filedata.encryptedPin, ',');
+        getline(ss, filedata.birthday,      ',');
+        getline(ss, filedata.encryptedPin,  ',');
         getline(ss, filedata.contactNumber, ',');
-        getline(ss, strBalance, ',');
+        getline(ss, strBalance,             ',');
         if(strBalance.empty()) continue;
         filedata.balance = stod(strBalance);
+        getline(ss, filedata.secQuestion,   ',');
+        getline(ss, filedata.encSecAnswer,  ',');
+        getline(ss, tmp,                    ',');
+        filedata.histCount = tmp.empty() ? 0 : stoi(tmp);
+        for(int h = 0; h < MAX_HISTORY; h++){
+            string htype, hamount, hbal, hdate;
+            getline(ss, htype,   ',');
+            getline(ss, hamount, ',');
+            getline(ss, hbal,    ',');
+            getline(ss, hdate,   ',');
+            if(h < filedata.histCount && !htype.empty()){
+                filedata.history[h].type         = htype;
+                filedata.history[h].amount       = hamount.empty() ? 0 : stod(hamount);
+                filedata.history[h].balanceAfter = hbal.empty()    ? 0 : stod(hbal);
+                filedata.history[h].date         = hdate;
+            }
+        }
         if(!isFull()){
             person[++last] = filedata;
         }
@@ -301,6 +377,7 @@ void AccountManager :: registerAccount(){
     }
 
     User x;
+    x.histCount = 0;
     string accNum;
     string rawPin;
     int bMonth, bDay, bYear;
@@ -369,6 +446,33 @@ void AccountManager :: registerAccount(){
     } while(locate(accNum) != -1);
     x.accountNumber = accNum;
 
+    cin.ignore(1000, '\n');
+    cout << "\n--- SECURITY QUESTION SETUP ---" << endl;
+    cout << "Choose a security question:" << endl;
+    cout << "[1] What is your mother's maiden name?" << endl;
+    cout << "[2] What is the name of your first pet?" << endl;
+    cout << "[3] What is your elementary school name?" << endl;
+    cout << "[4] What is your favorite childhood nickname?" << endl;
+    int qChoice = 0;
+    do{
+        cout << "Select [1-4]: ";
+        cin >> qChoice;
+        if(cin.fail()){ cin.clear(); cin.ignore(1000, '\n'); qChoice = 0; }
+    } while(qChoice < 1 || qChoice > 4);
+    string questions[] = {
+        "What is your mother's maiden name?",
+        "What is the name of your first pet?",
+        "What is your elementary school name?",
+        "What is your favorite childhood nickname?"
+    };
+    x.secQuestion = questions[qChoice - 1];
+    cin.ignore(1000, '\n');
+    string secAnswer;
+    cout << x.secQuestion << " ";
+    getline(cin, secAnswer);
+    for(int i = 0; i < (int)secAnswer.size(); i++) secAnswer[i] = tolower(secAnswer[i]);
+    x.encSecAnswer = passwordEncryptor(secAnswer.size() >= 4 ? secAnswer.substr(0, 4) : secAnswer);
+
     do{
         cout << "Set a 4-digit PIN: ";
         cin >> rawPin;
@@ -377,6 +481,7 @@ void AccountManager :: registerAccount(){
 
     last++;
     person[last] = x;
+    addHistory(last, "ACCOUNT OPENED", x.balance, x.balance);
 
     if(!saveDrive(accNum, x.encryptedPin)){
         cout << "Registration failed: could not write to card." << endl;
@@ -497,6 +602,7 @@ bool AccountManager :: deposit(){
     }
 
     person[currentUser].balance += amount;
+    addHistory(currentUser, "DEPOSIT", amount, person[currentUser].balance);
     save();
 
     cout << "\n--- DEPOSIT SUCCESSFUL ---" << endl;
@@ -547,6 +653,7 @@ bool AccountManager :: withdraw(){
     }
 
     person[currentUser].balance -= amount;
+    addHistory(currentUser, "WITHDRAW", amount, person[currentUser].balance);
     save();
 
     cout << "\n--- WITHDRAWAL SUCCESSFUL ---" << endl;
@@ -622,6 +729,8 @@ void AccountManager :: fundTransfer(){
 
     person[currentUser].balance -= amount;
     person[index].balance       += amount;
+    addHistory(currentUser, "TRANSFER OUT to "  + person[index].accountNumber,       amount, person[currentUser].balance);
+    addHistory(index,       "TRANSFER IN from " + person[currentUser].accountNumber,  amount, person[index].balance);
     save();
 
     cout << "\n--- TRANSFER SUCCESSFUL ---" << endl;
@@ -687,6 +796,91 @@ void AccountManager :: changePin(){
     system("pause");
 }
 
+void AccountManager :: recoverPin(){
+    system("cls");
+    string cardAccNum, cardEncPin;
+    if(!retrieveDrive(cardAccNum, cardEncPin)){
+        cout << "Unable to read card." << endl;
+        system("pause");
+        return;
+    }
+    int pos = locate(cardAccNum);
+    if(pos == -1){
+        cout << "Account not found." << endl;
+        system("pause");
+        return;
+    }
+    cout << "========================================" << endl;
+    cout << "             PIN RECOVERY               " << endl;
+    cout << "========================================" << endl;
+    cout << "Security Question: " << person[pos].secQuestion << endl;
+    cin.ignore(1000, '\n');
+    string answer;
+    cout << "Your Answer: ";
+    getline(cin, answer);
+    for(int i = 0; i < (int)answer.size(); i++) answer[i] = tolower(answer[i]);
+    string encAnswer = passwordEncryptor(answer.size() >= 4 ? answer.substr(0, 4) : answer);
+    if(encAnswer != person[pos].encSecAnswer){
+        cout << "\nIncorrect answer. Cannot recover PIN." << endl;
+        system("pause");
+        return;
+    }
+    string newPin, confirmPin;
+    cout << "\nAnswer verified! Set a new 4-digit PIN: ";
+    cin >> newPin;
+    if(!pinValidation(newPin)) return;
+    cout << "Confirm new PIN: ";
+    cin >> confirmPin;
+    if(newPin != confirmPin){
+        cout << "\nPINs do not match." << endl;
+        system("pause");
+        return;
+    }
+    string newEncPin = passwordEncryptor(newPin);
+    person[pos].encryptedPin = newEncPin;
+    saveDrive(person[pos].accountNumber, newEncPin);
+    save();
+    cout << "\nPIN reset successfully! Please log in with your new PIN." << endl;
+    system("pause");
+}
+
+void AccountManager :: miniStatement(){
+    system("cls");
+    if(currentUser == -1){
+        cout << "No account is currently logged in." << endl;
+        system("pause");
+        return;
+    }
+    cout << fixed << setprecision(2);
+    cout << "========================================" << endl;
+    cout << "            MINI STATEMENT              " << endl;
+    cout << "Account: " << person[currentUser].accountNumber << endl;
+    cout << "Name   : " << person[currentUser].accountName   << endl;
+    cout << "========================================" << endl;
+    int count = person[currentUser].histCount;
+    if(count == 0){
+        cout << "No transactions yet." << endl;
+        system("pause");
+        return;
+    }
+    cout << left
+         << setw(18) << "DATE"
+         << setw(26) << "TYPE"
+         << setw(12) << "AMOUNT"
+         << "BALANCE" << endl;
+    cout << string(68, '-') << endl;
+    for(int i = count - 1; i >= 0; i--){
+        cout << left
+             << setw(18) << person[currentUser].history[i].date
+             << setw(26) << person[currentUser].history[i].type
+             << setw(12) << person[currentUser].history[i].amount
+             << person[currentUser].history[i].balanceAfter << endl;
+    }
+    cout << "========================================" << endl;
+    cout << "Current Balance: PHP " << person[currentUser].balance << endl;
+    system("pause");
+}
+
 int AccountManager :: menu(){
     system("cls");
     int choice;
@@ -699,9 +893,10 @@ int AccountManager :: menu(){
     cout << "[3] Withdraw" << endl;
     cout << "[4] Fund Transfer" << endl;
     cout << "[5] Change PIN" << endl;
-    cout << "[6] Logout" << endl;
+    cout << "[6] Mini Statement" << endl;
+    cout << "[7] Logout" << endl;
     cout << "----------------------------------------" << endl;
-    cout << "Input your Choice (1-6): ";
+    cout << "Input your Choice (1-7): ";
     cin >> choice;
 
     if(cin.fail()){
@@ -735,6 +930,21 @@ int main(){
     int attempts = 4;
 
     while(attempts > 0){
+        system("cls");
+        cout << "========================================" << endl;
+        cout << "  eVault - \"Your Money. Digitally Secured\"" << endl;
+        cout << "========================================" << endl;
+        cout << "[1] Login" << endl;
+        cout << "[2] Forgot PIN" << endl;
+        cout << "----------------------------------------" << endl;
+        cout << "Select: ";
+        int startChoice; cin >> startChoice;
+
+        if(startChoice == 2){
+            atm.recoverPin();
+            continue;
+        }
+
         if(atm.loginAccount()){
             loggedIn = true;
             break;
@@ -776,6 +986,9 @@ int main(){
                 atm.changePin();      
                 break;
             case 6:
+                atm.miniStatement();
+                break;
+            case 7:
                 atm.logout();
                 cout << "\nLogged out. Thank you!" << endl;
                 system("pause");
@@ -784,7 +997,7 @@ int main(){
                 cout << "\nInvalid choice. Try again." << endl;
                 system("pause");
         }
-    } while(choice != 6);
+    } while(choice != 7);
 
     atm.save();
     return 0;
